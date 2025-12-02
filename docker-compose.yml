@@ -2,6 +2,14 @@ name: gridgain9-datastreamer-test
 
 x-gridgain-def: &gridgain-def
   image: gridgain/gridgain9:9.1.14-openjdk17-arm64
+  deploy:
+    resources:
+      limits:
+        cpus: '4'
+        memory: 10G
+      reservations:
+        cpus: '2'
+        memory: 8G
   environment:
     JVM_MAX_MEM: "4g"
     JVM_MIN_MEM: "4g"
@@ -41,21 +49,21 @@ services:
 
   node4:
     <<: *gridgain-def
-    command: --node-name node3
+    command: --node-name node4
     ports:
       - "10303:10300"
       - "10803:10800"
     volumes:
-      - ./data/node3:/opt/gridgain/work
+      - ./data/node4:/opt/gridgain/work
 
   node5:
     <<: *gridgain-def
-    command: --node-name node3
+    command: --node-name node5
     ports:
       - "10304:10300"
       - "10804:10800"
     volumes:
-      - ./data/node3:/opt/gridgain/work
+      - ./data/node5:/opt/gridgain/work
 
 configs:
   node_config:

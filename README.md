@@ -32,7 +32,7 @@ For Macs with less than 64 GB RAM, reduce the cluster to 3 nodes or lower per-no
 
 ```
 .
-├── docker-compose.yml                    # 3-node GridGain cluster
+├── docker-compose.yml                    # 5-node GridGain cluster
 ├── cluster-init.sh                       # Initialize cluster with license
 ├── cluster-state.sh                      # Check cluster state
 ├── cluster-config.sh                     # View cluster configuration
