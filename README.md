@@ -24,7 +24,7 @@ The 5-node cluster requires significant resources. Each node allocates 4 GB heap
 | Swap | 2 GB | 4 GB |
 | Disk | 30 GB | 50 GB |
 
-Configure in Docker Desktop: Settings → Resources → Advanced
+Configure in Docker Desktop: Settings > Resources > Advanced
 
 For Macs with less than 64 GB RAM, reduce the cluster to 3 nodes or lower per-node memory settings in `docker-compose.yml`.
 
@@ -33,18 +33,25 @@ For Macs with less than 64 GB RAM, reduce the cluster to 3 nodes or lower per-no
 ```
 .
 ├── docker-compose.yml                    # 5-node GridGain cluster
-├── cluster-init.sh                       # Initialize cluster with license
-├── cluster-state.sh                      # Check cluster state
-├── cluster-config.sh                     # View cluster configuration
-├── license.example.conf                  # Example license format (no secrets)
 ├── pom.xml                               # Maven build configuration
+├── config/
+│   └── gridgain-logging.properties       # GridGain node logging config
+├── scripts/
+│   ├── cluster-init.sh                   # Initialize cluster with license
+│   └── fetch-node-logs.sh                # Fetch logs from Docker containers
+├── logs/
+│   ├── app/                              # Application logs
+│   │   ├── datastreamer.log              # DataStreamer application logs
+│   │   ├── ignite-client.log             # Ignite client connection logs
+│   │   └── all.log                       # Combined logs
+│   └── node{1-5}/                        # GridGain node logs (via script)
 ├── src/main/java/com/gridgain/examples/datastreamer/
 │   ├── DataStreamerTest.java             # Main application
 │   ├── SyntheticDataPublisher.java       # Custom Flow.Publisher
 │   ├── StreamingMetrics.java             # Metrics tracking
 │   └── ManagedExecutorService.java       # Executor lifecycle management
 └── src/main/resources/
-    └── log4j2.xml                        # Logging configuration
+    └── log4j2.xml                        # Application logging configuration
 ```
 
 ## Quick Start
@@ -70,17 +77,13 @@ The license file is gitignored. See `license.example.conf` for the expected form
 ### 3. Initialize the Cluster
 
 ```bash
-./cluster-init.sh
+./scripts/cluster-init.sh
 ```
 
 This script:
 - Reads the license from `my-gridgain-9.1.license.conf`
 - Initializes the cluster via the REST API
 - Displays the cluster state
-
-Other helper scripts:
-- `./cluster-state.sh` - Check cluster state
-- `./cluster-config.sh` - View cluster configuration
 
 ### 4. Build the Application
 
@@ -93,19 +96,20 @@ mvn clean package
 With defaults (20 million records):
 
 ```bash
-mvn exec:java
+mvn exec:exec
 ```
 
 With custom configuration:
 
 ```bash
-RECORD_COUNT=1000000 PAGE_SIZE=10000 mvn exec:java
+RECORD_COUNT=1000000 PAGE_SIZE=10000 mvn exec:exec
 ```
 
 Or run the JAR directly:
 
 ```bash
-java -jar target/datastreamer-test-1.0.0-SNAPSHOT.jar
+java -Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager \
+     -jar target/datastreamer-test-1.0.0-SNAPSHOT.jar
 ```
 
 ## Configuration
@@ -114,11 +118,46 @@ Configure the test via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `IGNITE_CONNECT_ADDRESS` | 127.0.0.1:10800 | Cluster client endpoint |
+| `IGNITE_CONNECT_ADDRESSES` | 127.0.0.1:10800,...10804 | Comma-separated cluster endpoints |
 | `RECORD_COUNT` | 20,000,000 | Total records to stream |
 | `PAGE_SIZE` | 5,000 | DataStreamer page size |
 | `PARALLEL_OPS` | 4 | Per-partition parallel operations |
 | `MONITOR_INTERVAL_SECONDS` | 10 | Progress report interval |
+
+## Logging
+
+The application uses SLF4J with Log4j2 and captures logs from multiple sources:
+
+### Application Logs
+
+| Log File | Contents |
+|----------|----------|
+| `logs/app/datastreamer.log` | Application-specific logs |
+| `logs/app/ignite-client.log` | Ignite client connection and partition logs |
+| `logs/app/all.log` | Combined logs from all sources |
+
+### GridGain Node Logs
+
+GridGain 9 nodes write to stdout, which Docker captures. Fetch node logs with:
+
+```bash
+# Fetch all logs
+./scripts/fetch-node-logs.sh
+
+# Fetch last 1000 lines per node
+./scripts/fetch-node-logs.sh --tail 1000
+
+# Fetch logs from the last hour
+./scripts/fetch-node-logs.sh --since 1h
+```
+
+Node logs are saved to `logs/node{1-5}/docker-stdout.log`.
+
+You can also view logs in real-time:
+
+```bash
+docker compose logs -f node1
+```
 
 ## Architecture
 
@@ -161,14 +200,14 @@ The application outputs phase-based progress:
 
 ```
 === DataStreamer Test Configuration ===
-    Connect Address: 127.0.0.1:10800
-    Record Count:    20,000,000
-    Page Size:       5,000
-    Parallel Ops:    4
-    Monitor Interval: 10 seconds
+    Connect Addresses: 127.0.0.1:10800, 127.0.0.1:10801, ...
+    Record Count:      20,000,000
+    Page Size:         5,000
+    Parallel Ops:      4
+    Monitor Interval:  10 seconds
 
 === [1/4] Connecting to Cluster ===
-<<< Connected to 127.0.0.1:10800
+<<< Connected to 5 node(s)
 
 === [2/4] Preparing Schema ===
 >>> Dropping existing table if present
@@ -178,23 +217,29 @@ The application outputs phase-based progress:
 === [3/4] Streaming Data ===
 >>> DataStreamer configured: pageSize=5000, parallelOps=4
 >>> Starting stream of 20,000,000 records
---- Published: 2,500,000 | Rate: 45,000/s (peak: 48,000/s) | Backpressure: 12 | Heap: 512MB/2048MB
-...
-<<< Streaming completed in 445.23 seconds
+--- Published: 7,159,773 | Rate: 633,026/s (peak: 633,026/s) | Backpressure: 57 | Heap: 3,570MB/12,288MB
+--- Published: 15,617,754 | Rate: 845,800/s (peak: 845,800/s) | Backpressure: 236 | Heap: 5,831MB/12,288MB
+<<< Streaming completed in 26.04 seconds
 
 === [4/4] Creating Indexes ===
 >>> Creating secondary indexes
-    Created index: idx_testtable_name
-    Created index: idx_testtable_value
-<<< Indexes created in 23.45 seconds
+    Created index: idx_testtable_label
+    Created index: idx_testtable_amount
+<<< Indexes created in 52.61 seconds
+
+>>> Verifying data load
+<<< Verification: 20,000,000 records in table
 
 === DataStreamer Metrics Report ===
     Total Events Published: 20,000,000
-    Total Events Requested: 20,000,000
-    Backpressure Events:    1,234
-    Elapsed Time:           468.68 seconds
-    Average Rate:           42,669 events/sec
-    Peak Rate:              48,123 events/sec
+    Total Events Requested: 20,012,169
+    Backpressure Events:    371
+    Batches Completed:      0
+    Elapsed Time:           80.19 seconds
+    Average Rate:           249,419 events/sec
+    Peak Rate:              845,800 events/sec
+    Avg Batch Time:         0.00 ms
+    Final Heap Usage:       5,871MB / 12,288MB
 ===================================
 ```
 
@@ -206,10 +251,10 @@ Stop and remove the cluster:
 docker compose down -v
 ```
 
-Remove data volumes:
+Remove data and log volumes:
 
 ```bash
-rm -rf data/
+rm -rf data/ logs/
 ```
 
 ## Troubleshooting
@@ -220,7 +265,7 @@ Ensure the cluster is initialized and nodes are running:
 
 ```bash
 docker compose ps
-docker logs gridgain9-datastreamer-test-node1-1
+docker compose logs node1
 ```
 
 ### Primary Replica Changed Errors
@@ -232,7 +277,23 @@ Increase RAFT retry timeout in the cluster configuration. The docker-compose alr
 Reduce `RECORD_COUNT` or increase heap size:
 
 ```bash
-MAVEN_OPTS="-Xmx4g" mvn exec:java
+MAVEN_OPTS="-Xmx4g" mvn exec:exec
+```
+
+### Viewing All Logs
+
+For debugging, check the combined log file:
+
+```bash
+tail -f logs/app/all.log
+```
+
+Or fetch and view node logs:
+
+```bash
+./scripts/fetch-node-logs.sh
+cat logs/node1/docker-stdout.log
+
 ```
 
 ## Analysis
