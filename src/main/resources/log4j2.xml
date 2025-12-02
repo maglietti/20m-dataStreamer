@@ -8,7 +8,7 @@
             <PatternLayout pattern="%d{HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n"/>
         </Console>
 
-        <!-- Rolling file appender for application logs -->
+        <!-- Rolling file appender for all application logs -->
         <RollingFile name="AppFile"
                      fileName="${logPath}/datastreamer.log"
                      filePattern="${logPath}/datastreamer-%d{yyyy-MM-dd}-%i.log.gz">
@@ -20,7 +20,7 @@
             <DefaultRolloverStrategy max="10"/>
         </RollingFile>
 
-        <!-- Separate file for Ignite client logs -->
+        <!-- Separate file for Ignite/GridGain client logs (includes JUL-bridged logs) -->
         <RollingFile name="IgniteFile"
                      fileName="${logPath}/ignite-client.log"
                      filePattern="${logPath}/ignite-client-%d{yyyy-MM-dd}-%i.log.gz">
@@ -31,28 +31,50 @@
             </Policies>
             <DefaultRolloverStrategy max="10"/>
         </RollingFile>
+
+        <!-- Combined log file for complete analysis -->
+        <RollingFile name="AllFile"
+                     fileName="${logPath}/all.log"
+                     filePattern="${logPath}/all-%d{yyyy-MM-dd}-%i.log.gz">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger - %msg%n"/>
+            <Policies>
+                <SizeBasedTriggeringPolicy size="100 MB"/>
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+            </Policies>
+            <DefaultRolloverStrategy max="5"/>
+        </RollingFile>
     </Appenders>
     <Loggers>
-        <!-- GridGain/Ignite client loggers -->
-        <Logger name="org.apache.ignite" level="INFO" additivity="false">
-            <AppenderRef ref="Console"/>
+        <!-- GridGain/Ignite client loggers (JUL-bridged) -->
+        <Logger name="org.apache.ignite" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console" level="INFO"/>
             <AppenderRef ref="IgniteFile"/>
+            <AppenderRef ref="AllFile"/>
         </Logger>
-        <Logger name="com.gridgain" level="INFO" additivity="false">
-            <AppenderRef ref="Console"/>
-            <AppenderRef ref="AppFile"/>
+        <Logger name="org.gridgain" level="DEBUG" additivity="false">
+            <AppenderRef ref="Console" level="INFO"/>
+            <AppenderRef ref="IgniteFile"/>
+            <AppenderRef ref="AllFile"/>
         </Logger>
 
         <!-- Application loggers -->
         <Logger name="com.gridgain.examples" level="DEBUG" additivity="false">
             <AppenderRef ref="Console"/>
             <AppenderRef ref="AppFile"/>
+            <AppenderRef ref="AllFile"/>
         </Logger>
 
-        <!-- Root logger -->
-        <Root level="WARN">
-            <AppenderRef ref="Console"/>
-            <AppenderRef ref="AppFile"/>
+        <!-- Netty and network layer (useful for connection debugging) -->
+        <Logger name="io.netty" level="INFO" additivity="false">
+            <AppenderRef ref="Console" level="WARN"/>
+            <AppenderRef ref="IgniteFile"/>
+            <AppenderRef ref="AllFile"/>
+        </Logger>
+
+        <!-- Root logger catches everything else -->
+        <Root level="INFO">
+            <AppenderRef ref="Console" level="WARN"/>
+            <AppenderRef ref="AllFile"/>
         </Root>
     </Loggers>
 </Configuration>

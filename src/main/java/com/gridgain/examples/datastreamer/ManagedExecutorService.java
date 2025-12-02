@@ -17,6 +17,9 @@
 
 package com.gridgain.examples.datastreamer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.*;
@@ -35,6 +38,8 @@ import java.util.concurrent.*;
  * </pre>
  */
 public class ManagedExecutorService implements ExecutorService, AutoCloseable {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ManagedExecutorService.class);
 
     private final ExecutorService delegate;
     private final String name;
@@ -88,16 +93,20 @@ public class ManagedExecutorService implements ExecutorService, AutoCloseable {
 
     @Override
     public void close() {
+        LOG.debug("Shutting down executor '{}'", name);
         shutdown();
         try {
             if (!awaitTermination(shutdownTimeoutSeconds, TimeUnit.SECONDS)) {
-                System.out.printf("!!! Executor '%s' did not terminate gracefully, forcing shutdown%n", name);
+                LOG.warn("Executor '{}' did not terminate gracefully, forcing shutdown", name);
                 shutdownNow();
                 if (!awaitTermination(10, TimeUnit.SECONDS)) {
-                    System.out.printf("!!! Executor '%s' did not terminate after force shutdown%n", name);
+                    LOG.error("Executor '{}' did not terminate after force shutdown", name);
                 }
+            } else {
+                LOG.debug("Executor '{}' shut down successfully", name);
             }
         } catch (InterruptedException e) {
+            LOG.warn("Interrupted while waiting for executor '{}' to terminate", name);
             shutdownNow();
             Thread.currentThread().interrupt();
         }

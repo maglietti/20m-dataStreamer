@@ -17,6 +17,9 @@
 
 package com.gridgain.examples.datastreamer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.OperatingSystemMXBean;
@@ -33,6 +36,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * from multiple streaming threads.
  */
 public class StreamingMetrics {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StreamingMetrics.class);
 
     // Event counters
     private final AtomicLong eventsGenerated = new AtomicLong(0);
@@ -89,7 +94,10 @@ public class StreamingMetrics {
      * Records a backpressure event (when demand reaches zero).
      */
     public void recordBackpressureEvent() {
-        backpressureEvents.incrementAndGet();
+        long count = backpressureEvents.incrementAndGet();
+        if (count % 100 == 0) {
+            LOG.debug("Backpressure event #{}: demand exhausted, waiting for subscriber", count);
+        }
     }
 
     /**

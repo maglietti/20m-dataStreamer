@@ -21,6 +21,8 @@ import org.apache.ignite.client.IgniteClient;
 import org.apache.ignite.table.DataStreamerOptions;
 import org.apache.ignite.table.RecordView;
 import org.apache.ignite.table.Tuple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -48,6 +50,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class DataStreamerTest {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DataStreamerTest.class);
+
     // Configuration with environment variable overrides
     // Multiple addresses enable load balancing and failover
     private static final String[] CONNECT_ADDRESSES = getEnv(
@@ -67,35 +71,34 @@ public class DataStreamerTest {
         StreamingMetrics metrics = new StreamingMetrics();
 
         // Phase 1: Connect and prepare schema
-        System.out.println("\n=== [1/4] Connecting to Cluster ===");
+        LOG.info("=== [1/4] Connecting to Cluster ===");
 
         try (IgniteClient client = IgniteClient.builder()
                 .addresses(CONNECT_ADDRESSES)
                 .build()) {
 
-            System.out.printf("<<< Connected to %d node(s)%n", CONNECT_ADDRESSES.length);
+            LOG.info("<<< Connected to {} node(s)", CONNECT_ADDRESSES.length);
 
             // Phase 2: Create table without indexes (deferred index creation)
-            System.out.println("\n=== [2/4] Preparing Schema ===");
+            LOG.info("=== [2/4] Preparing Schema ===");
             prepareSchema(client);
 
             // Phase 3: Stream data with monitoring
-            System.out.println("\n=== [3/4] Streaming Data ===");
+            LOG.info("=== [3/4] Streaming Data ===");
             streamData(client, metrics);
 
             // Phase 4: Create indexes after data load
-            System.out.println("\n=== [4/4] Creating Indexes ===");
+            LOG.info("=== [4/4] Creating Indexes ===");
             createIndexes(client);
 
             // Verify data
             verifyData(client);
 
             // Final report
-            System.out.println(metrics.getDetailedReport());
+            LOG.info(metrics.getDetailedReport());
 
         } catch (Exception e) {
-            System.err.println("!!! Fatal error: " + e.getMessage());
-            e.printStackTrace();
+            LOG.error("!!! Fatal error: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
@@ -104,27 +107,27 @@ public class DataStreamerTest {
      * Prints configuration at startup for verification.
      */
     private static void printConfiguration() {
-        System.out.println("=== DataStreamer Test Configuration ===");
-        System.out.printf("    Connect Addresses: %s%n", String.join(", ", CONNECT_ADDRESSES));
-        System.out.printf("    Record Count:      %,d%n", RECORD_COUNT);
-        System.out.printf("    Page Size:       %,d%n", PAGE_SIZE);
-        System.out.printf("    Parallel Ops:    %d%n", PARALLEL_OPS);
-        System.out.printf("    Monitor Interval: %d seconds%n", MONITOR_INTERVAL);
+        LOG.info("=== DataStreamer Test Configuration ===");
+        LOG.info("    Connect Addresses: {}", String.join(", ", CONNECT_ADDRESSES));
+        LOG.info("    Record Count:      {}", String.format("%,d", RECORD_COUNT));
+        LOG.info("    Page Size:         {}", String.format("%,d", PAGE_SIZE));
+        LOG.info("    Parallel Ops:      {}", PARALLEL_OPS);
+        LOG.info("    Monitor Interval:  {} seconds", MONITOR_INTERVAL);
     }
 
     /**
      * Creates the test table without indexes for faster bulk loading.
      */
     private static void prepareSchema(IgniteClient client) {
-        System.out.println(">>> Dropping existing table if present");
+        LOG.info(">>> Dropping existing table if present");
 
         try {
             client.sql().execute(null, "DROP TABLE IF EXISTS " + TABLE_NAME);
         } catch (Exception e) {
-            System.out.println("    Note: Table drop returned: " + e.getMessage());
+            LOG.debug("    Note: Table drop returned: {}", e.getMessage());
         }
 
-        System.out.println(">>> Creating table without indexes");
+        LOG.info(">>> Creating table without indexes");
 
         // Create table without secondary indexes for optimal bulk load performance
         String createTableSql = String.format(
@@ -137,7 +140,7 @@ public class DataStreamerTest {
         );
 
         client.sql().execute(null, createTableSql);
-        System.out.printf("<<< Table '%s' created (indexes deferred)%n", TABLE_NAME);
+        LOG.info("<<< Table '{}' created (indexes deferred)", TABLE_NAME);
     }
 
     /**
@@ -153,8 +156,7 @@ public class DataStreamerTest {
             .autoFlushInterval(1000)
             .build();
 
-        System.out.printf(">>> DataStreamer configured: pageSize=%d, parallelOps=%d%n",
-            PAGE_SIZE, PARALLEL_OPS);
+        LOG.info(">>> DataStreamer configured: pageSize={}, parallelOps={}", PAGE_SIZE, PARALLEL_OPS);
 
         // Use managed executors for proper lifecycle management
         try (ManagedExecutorService publisherExecutor =
@@ -170,13 +172,13 @@ public class DataStreamerTest {
             // Start progress monitoring
             ScheduledExecutorService monitorExecutor = Executors.newSingleThreadScheduledExecutor();
             ScheduledFuture<?> monitorTask = monitorExecutor.scheduleAtFixedRate(
-                () -> System.out.println("--- " + metrics.getProgressReport()),
+                () -> LOG.info("--- {}", metrics.getProgressReport()),
                 MONITOR_INTERVAL,
                 MONITOR_INTERVAL,
                 TimeUnit.SECONDS
             );
 
-            System.out.printf(">>> Starting stream of %,d records%n", RECORD_COUNT);
+            LOG.info(">>> Starting stream of {} records", String.format("%,d", RECORD_COUNT));
             long startTime = System.currentTimeMillis();
 
             try {
@@ -185,7 +187,7 @@ public class DataStreamerTest {
                 streamFuture.join();
 
                 long elapsed = System.currentTimeMillis() - startTime;
-                System.out.printf("<<< Streaming completed in %.2f seconds%n", elapsed / 1000.0);
+                LOG.info("<<< Streaming completed in {} seconds", String.format("%.2f", elapsed / 1000.0));
 
             } finally {
                 // Clean up monitor
@@ -194,7 +196,7 @@ public class DataStreamerTest {
             }
 
         } catch (Exception e) {
-            System.err.println("!!! Streaming failed: " + e.getMessage());
+            LOG.error("!!! Streaming failed: {}", e.getMessage(), e);
             throw new RuntimeException("Data streaming failed", e);
         }
     }
@@ -203,7 +205,7 @@ public class DataStreamerTest {
      * Creates secondary indexes after bulk data load.
      */
     private static void createIndexes(IgniteClient client) {
-        System.out.println(">>> Creating secondary indexes");
+        LOG.info(">>> Creating secondary indexes");
 
         long startTime = System.currentTimeMillis();
 
@@ -212,9 +214,9 @@ public class DataStreamerTest {
             client.sql().execute(null,
                 String.format("CREATE INDEX IF NOT EXISTS idx_%s_label ON %s (label)",
                     TABLE_NAME.toLowerCase(), TABLE_NAME));
-            System.out.println("    Created index: idx_testtable_label");
+            LOG.info("    Created index: idx_testtable_label");
         } catch (Exception e) {
-            System.out.println("!!! Index creation warning: " + e.getMessage());
+            LOG.warn("!!! Index creation warning: {}", e.getMessage());
         }
 
         // Create index on amount column
@@ -222,20 +224,20 @@ public class DataStreamerTest {
             client.sql().execute(null,
                 String.format("CREATE INDEX IF NOT EXISTS idx_%s_amount ON %s (amount)",
                     TABLE_NAME.toLowerCase(), TABLE_NAME));
-            System.out.println("    Created index: idx_testtable_amount");
+            LOG.info("    Created index: idx_testtable_amount");
         } catch (Exception e) {
-            System.out.println("!!! Index creation warning: " + e.getMessage());
+            LOG.warn("!!! Index creation warning: {}", e.getMessage());
         }
 
         long elapsed = System.currentTimeMillis() - startTime;
-        System.out.printf("<<< Indexes created in %.2f seconds%n", elapsed / 1000.0);
+        LOG.info("<<< Indexes created in {} seconds", String.format("%.2f", elapsed / 1000.0));
     }
 
     /**
      * Verifies data was loaded correctly.
      */
     private static void verifyData(IgniteClient client) {
-        System.out.println("\n>>> Verifying data load");
+        LOG.info(">>> Verifying data load");
 
         try {
             var result = client.sql().execute(null,
@@ -243,15 +245,15 @@ public class DataStreamerTest {
 
             if (result.hasNext()) {
                 long count = result.next().longValue("cnt");
-                System.out.printf("<<< Verification: %,d records in table%n", count);
+                LOG.info("<<< Verification: {} records in table", String.format("%,d", count));
 
                 if (count != RECORD_COUNT) {
-                    System.out.printf("!!! Warning: Expected %,d records but found %,d%n",
-                        RECORD_COUNT, count);
+                    LOG.warn("!!! Warning: Expected {} records but found {}",
+                        String.format("%,d", RECORD_COUNT), String.format("%,d", count));
                 }
             }
         } catch (Exception e) {
-            System.out.println("!!! Verification failed: " + e.getMessage());
+            LOG.error("!!! Verification failed: {}", e.getMessage(), e);
         }
     }
 
@@ -268,8 +270,7 @@ public class DataStreamerTest {
             try {
                 return Integer.parseInt(value);
             } catch (NumberFormatException e) {
-                System.out.printf("!!! Invalid value for %s: %s, using default: %d%n",
-                    name, value, defaultValue);
+                LOG.warn("!!! Invalid value for {}: {}, using default: {}", name, value, defaultValue);
             }
         }
         return defaultValue;
@@ -281,8 +282,7 @@ public class DataStreamerTest {
             try {
                 return Long.parseLong(value);
             } catch (NumberFormatException e) {
-                System.out.printf("!!! Invalid value for %s: %s, using default: %d%n",
-                    name, value, defaultValue);
+                LOG.warn("!!! Invalid value for {}: {}, using default: {}", name, value, defaultValue);
             }
         }
         return defaultValue;

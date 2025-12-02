@@ -19,6 +19,8 @@ package com.gridgain.examples.datastreamer;
 
 import org.apache.ignite.table.DataStreamerItem;
 import org.apache.ignite.table.Tuple;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -45,6 +47,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<Tuple>> {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SyntheticDataPublisher.class);
+
     private final long totalRecords;
     private final StreamingMetrics metrics;
     private final Executor deliveryExecutor;
@@ -70,9 +74,11 @@ public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<T
         }
 
         if (subscribed.compareAndSet(false, true)) {
+            LOG.debug("Subscriber attached, starting data generation for {} records", totalRecords);
             SyntheticDataSubscription subscription = new SyntheticDataSubscription(subscriber);
             subscriber.onSubscribe(subscription);
         } else {
+            LOG.error("Publisher already has a subscriber, rejecting new subscription");
             subscriber.onError(new IllegalStateException("Publisher already has a subscriber"));
         }
     }
@@ -146,6 +152,7 @@ public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<T
 
                 // Check if we've reached the target
                 if (currentGenerated >= totalRecords) {
+                    LOG.debug("Completed generation of {} records", totalRecords);
                     subscriber.onComplete();
                     return;
                 }
@@ -162,6 +169,7 @@ public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<T
                     demand.decrementAndGet();
 
                 } catch (Exception e) {
+                    LOG.error("Failed to generate item at index {}", currentGenerated, e);
                     subscriber.onError(new RuntimeException("Failed to generate item at index " + currentGenerated, e));
                     return;
                 }

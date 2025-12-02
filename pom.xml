@@ -64,6 +64,13 @@
             <version>${log4j.version}</version>
         </dependency>
 
+        <!-- JUL to Log4j2 bridge for GridGain/Ignite client logs -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-jul</artifactId>
+            <version>${log4j.version}</version>
+        </dependency>
+
         <!-- Testing Dependencies -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -102,10 +109,21 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.4.1</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                    </execution>
+                </executions>
                 <configuration>
-                    <mainClass>com.gridgain.examples.datastreamer.DataStreamerTest</mainClass>
-                    <includeProjectDependencies>true</includeProjectDependencies>
-                    <includePluginDependencies>false</includePluginDependencies>
+                    <executable>java</executable>
+                    <arguments>
+                        <argument>-Djava.util.logging.manager=org.apache.logging.log4j.jul.LogManager</argument>
+                        <argument>-classpath</argument>
+                        <classpath/>
+                        <argument>com.gridgain.examples.datastreamer.DataStreamerTest</argument>
+                    </arguments>
                 </configuration>
             </plugin>
 
@@ -144,27 +162,4 @@
         </plugins>
     </build>
 
-    <profiles>
-        <!-- Profile to run with custom environment variables -->
-        <profile>
-            <id>run</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.codehaus.mojo</groupId>
-                        <artifactId>exec-maven-plugin</artifactId>
-                        <configuration>
-                            <mainClass>com.gridgain.examples.datastreamer.DataStreamerTest</mainClass>
-                            <systemProperties>
-                                <systemProperty>
-                                    <key>java.util.logging.manager</key>
-                                    <value>org.apache.logging.log4j.jul.LogManager</value>
-                                </systemProperty>
-                            </systemProperties>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
 </project>

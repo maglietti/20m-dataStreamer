@@ -13,11 +13,12 @@ x-gridgain-def: &gridgain-def
   environment:
     JVM_MAX_MEM: "4g"
     JVM_MIN_MEM: "4g"
-    EXTRA_JVM_OPTIONS: "-XX:MaxDirectMemorySize=4g"
+    EXTRA_JVM_OPTIONS: "-XX:MaxDirectMemorySize=4g -Djava.util.logging.config.file=/opt/gridgain/etc/logging.properties"
   configs:
     - source: node_config
       target: /opt/gridgain/etc/gridgain-config.conf
-      mode: 0644
+    - source: logging_config
+      target: /opt/gridgain/etc/logging.properties
 
 services:
   node1:
@@ -92,3 +93,6 @@ configs:
           }
         ]
       }
+
+  logging_config:
+    file: ./config/gridgain-logging.properties
