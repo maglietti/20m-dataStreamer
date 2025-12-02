@@ -1,0 +1,63 @@
+name: gridgain9-datastreamer-test
+
+x-gridgain-def: &gridgain-def
+  image: gridgain/gridgain9:9.1.14-openjdk17-arm64
+  environment:
+    JVM_MAX_MEM: "4g"
+    JVM_MIN_MEM: "4g"
+    EXTRA_JVM_OPTIONS: "-XX:MaxDirectMemorySize=4g"
+  configs:
+    - source: node_config
+      target: /opt/gridgain/etc/gridgain-config.conf
+      mode: 0644
+
+services:
+  node1:
+    <<: *gridgain-def
+    command: --node-name node1
+    ports:
+      - "10300:10300"
+      - "10800:10800"
+    volumes:
+      - ./data/node1:/opt/gridgain/work
+
+  node2:
+    <<: *gridgain-def
+    command: --node-name node2
+    ports:
+      - "10301:10300"
+      - "10801:10800"
+    volumes:
+      - ./data/node2:/opt/gridgain/work
+
+  node3:
+    <<: *gridgain-def
+    command: --node-name node3
+    ports:
+      - "10302:10300"
+      - "10802:10800"
+    volumes:
+      - ./data/node3:/opt/gridgain/work
+
+configs:
+  node_config:
+    content: |
+      ignite.network {
+        port = 3344
+        nodeFinder.netClusterNodes = ["node1:3344", "node2:3344", "node3:3344"]
+      }
+
+      # RAFT configuration for high-throughput DataStreamer workloads
+      ignite.raft {
+        retryTimeoutMillis = 30000
+      }
+
+      ignite.storage {
+        profiles = [
+          {
+            engine = "aipersist",
+            name = "default",
+            replacementMode = "CLOCK"
+          }
+        ]
+      }
