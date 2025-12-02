@@ -28,6 +28,7 @@ services:
       - "10800:10800"
     volumes:
       - ./data/node1:/opt/gridgain/work
+      - ./logs/node1:/opt/gridgain/log
 
   node2:
     <<: *gridgain-def
@@ -37,6 +38,7 @@ services:
       - "10801:10800"
     volumes:
       - ./data/node2:/opt/gridgain/work
+      - ./logs/node2:/opt/gridgain/log
 
   node3:
     <<: *gridgain-def
@@ -46,6 +48,7 @@ services:
       - "10802:10800"
     volumes:
       - ./data/node3:/opt/gridgain/work
+      - ./logs/node3:/opt/gridgain/log
 
   node4:
     <<: *gridgain-def
@@ -55,6 +58,7 @@ services:
       - "10803:10800"
     volumes:
       - ./data/node4:/opt/gridgain/work
+      - ./logs/node4:/opt/gridgain/log
 
   node5:
     <<: *gridgain-def
@@ -64,6 +68,7 @@ services:
       - "10804:10800"
     volumes:
       - ./data/node5:/opt/gridgain/work
+      - ./logs/node5:/opt/gridgain/log
 
 configs:
   node_config:
