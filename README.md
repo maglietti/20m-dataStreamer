@@ -123,6 +123,7 @@ Configure the test via environment variables:
 | `PAGE_SIZE` | 5,000 | DataStreamer page size |
 | `PARALLEL_OPS` | 4 | Per-partition parallel operations |
 | `MONITOR_INTERVAL_SECONDS` | 10 | Progress report interval |
+| `CREATE_INDEXES_BEFORE_LOAD` | false | Create indexes before data load |
 
 ## Logging
 

@@ -47,6 +47,7 @@ import java.util.concurrent.TimeUnit;
  * - PAGE_SIZE: DataStreamer page size (default: 5000)
  * - PARALLEL_OPS: Per-partition parallel operations (default: 4)
  * - MONITOR_INTERVAL_SECONDS: Progress report interval (default: 10)
+ * - CREATE_INDEXES_BEFORE_LOAD: Create indexes before data load (default: false)
  */
 public class DataStreamerTest {
 
@@ -62,6 +63,7 @@ public class DataStreamerTest {
     private static final int PAGE_SIZE = getIntEnv("PAGE_SIZE", 5000);
     private static final int PARALLEL_OPS = getIntEnv("PARALLEL_OPS", 4);
     private static final int MONITOR_INTERVAL = getIntEnv("MONITOR_INTERVAL_SECONDS", 10);
+    private static final boolean CREATE_INDEXES_BEFORE_LOAD = getBoolEnv("CREATE_INDEXES_BEFORE_LOAD", false);
 
     private static final String TABLE_NAME = "TestTable";
 
@@ -79,17 +81,26 @@ public class DataStreamerTest {
 
             LOG.info("<<< Connected to {} node(s)", CONNECT_ADDRESSES.length);
 
-            // Phase 2: Create table without indexes (deferred index creation)
+            // Phase 2: Create table (with or without indexes based on config)
             LOG.info("=== [2/4] Preparing Schema ===");
             prepareSchema(client);
+
+            if (CREATE_INDEXES_BEFORE_LOAD) {
+                LOG.info(">>> Creating indexes BEFORE data load");
+                createIndexes(client);
+            }
 
             // Phase 3: Stream data with monitoring
             LOG.info("=== [3/4] Streaming Data ===");
             streamData(client, metrics);
 
-            // Phase 4: Create indexes after data load
-            LOG.info("=== [4/4] Creating Indexes ===");
-            createIndexes(client);
+            // Phase 4: Create indexes after data load (if not already created)
+            if (!CREATE_INDEXES_BEFORE_LOAD) {
+                LOG.info("=== [4/4] Creating Indexes ===");
+                createIndexes(client);
+            } else {
+                LOG.info("=== [4/4] Indexes Already Created ===");
+            }
 
             // Verify data
             verifyData(client);
@@ -113,6 +124,7 @@ public class DataStreamerTest {
         LOG.info("    Page Size:         {}", String.format("%,d", PAGE_SIZE));
         LOG.info("    Parallel Ops:      {}", PARALLEL_OPS);
         LOG.info("    Monitor Interval:  {} seconds", MONITOR_INTERVAL);
+        LOG.info("    Index Timing:      {}", CREATE_INDEXES_BEFORE_LOAD ? "BEFORE data load" : "AFTER data load");
     }
 
     /**
@@ -284,6 +296,14 @@ public class DataStreamerTest {
             } catch (NumberFormatException e) {
                 LOG.warn("!!! Invalid value for {}: {}, using default: {}", name, value, defaultValue);
             }
+        }
+        return defaultValue;
+    }
+
+    private static boolean getBoolEnv(String name, boolean defaultValue) {
+        String value = System.getenv(name);
+        if (value != null) {
+            return Boolean.parseBoolean(value);
         }
         return defaultValue;
     }
