@@ -39,12 +39,30 @@ services:
     volumes:
       - ./data/node3:/opt/gridgain/work
 
+  node4:
+    <<: *gridgain-def
+    command: --node-name node3
+    ports:
+      - "10303:10300"
+      - "10803:10800"
+    volumes:
+      - ./data/node3:/opt/gridgain/work
+
+  node5:
+    <<: *gridgain-def
+    command: --node-name node3
+    ports:
+      - "10304:10300"
+      - "10804:10800"
+    volumes:
+      - ./data/node3:/opt/gridgain/work
+
 configs:
   node_config:
     content: |
       ignite.network {
         port = 3344
-        nodeFinder.netClusterNodes = ["node1:3344", "node2:3344", "node3:3344"]
+        nodeFinder.netClusterNodes = ["node1:3344", "node2:3344", "node3:3344", "node4:3344", "node5:3344"]
       }
 
       # RAFT configuration for high-throughput DataStreamer workloads

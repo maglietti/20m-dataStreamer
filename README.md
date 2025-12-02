@@ -13,6 +13,21 @@ This application tests DataStreamer throughput by streaming synthetic data to a 
 - Docker and Docker Compose (for local cluster)
 - GridGain 9.1.14
 
+### Docker Desktop Resources (macOS)
+
+The 5-node cluster requires significant resources. Each node allocates 4 GB heap and 4 GB direct memory.
+
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| Memory | 40 GB | 44-48 GB |
+| CPUs | 8 | 10-12 |
+| Swap | 2 GB | 4 GB |
+| Disk | 30 GB | 50 GB |
+
+Configure in Docker Desktop: Settings → Resources → Advanced
+
+For Macs with less than 64 GB RAM, reduce the cluster to 3 nodes or lower per-node memory settings in `docker-compose.yml`.
+
 ## Project Structure
 
 ```
