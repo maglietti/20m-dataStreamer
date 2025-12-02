@@ -146,7 +146,7 @@ public class DataStreamerTest {
         DataStreamerOptions options = DataStreamerOptions.builder()
             .pageSize(PAGE_SIZE)
             .perPartitionParallelOperations(PARALLEL_OPS)
-            .autoFlushFrequency(1000)
+            .autoFlushInterval(1000)
             .build();
 
         System.out.printf(">>> DataStreamer configured: pageSize=%d, parallelOps=%d%n",
