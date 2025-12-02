@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration status="WARN">
     <Properties>
-        <Property name="LOG_DIR">${env:LOG_DIR:-./logs/app}</Property>
+        <Property name="LOG_DIR">${sys:LOG_DIR:-${env:LOG_DIR:-./logs/app}}</Property>
     </Properties>
     <Appenders>
         <Console name="Console" target="SYSTEM_OUT">
