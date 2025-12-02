@@ -32,22 +32,16 @@
 
     <repositories>
         <repository>
-            <id>gridgain-releases</id>
-            <url>https://repo.gridgain.com/repository/maven-gridgain-releases/</url>
+            <id>GridGain External Repository</id>
+            <url>https://www.gridgainsystems.com/nexus/content/repositories/external</url>
         </repository>
     </repositories>
 
     <dependencies>
         <!-- GridGain 9 Client Dependencies -->
         <dependency>
-            <groupId>com.gridgain</groupId>
-            <artifactId>gridgain-client</artifactId>
-            <version>${gridgain.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.gridgain</groupId>
-            <artifactId>gridgain-api</artifactId>
+            <groupId>org.gridgain</groupId>
+            <artifactId>ignite-client</artifactId>
             <version>${gridgain.version}</version>
         </dependency>
 
