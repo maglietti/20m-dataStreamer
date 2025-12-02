@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  * - Phase-based progress monitoring
  *
  * Configuration via environment variables:
- * - IGNITE_CONNECT_ADDRESS: Cluster address (default: 127.0.0.1:10800)
+ * - IGNITE_CONNECT_ADDRESSES: Comma-separated cluster addresses (default: all 5 local nodes)
  * - RECORD_COUNT: Number of records to stream (default: 20,000,000)
  * - PAGE_SIZE: DataStreamer page size (default: 5000)
  * - PARALLEL_OPS: Per-partition parallel operations (default: 4)
@@ -49,7 +49,11 @@ import java.util.concurrent.TimeUnit;
 public class DataStreamerTest {
 
     // Configuration with environment variable overrides
-    private static final String CONNECT_ADDRESS = getEnv("IGNITE_CONNECT_ADDRESS", "127.0.0.1:10800");
+    // Multiple addresses enable load balancing and failover
+    private static final String[] CONNECT_ADDRESSES = getEnv(
+        "IGNITE_CONNECT_ADDRESSES",
+        "127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802,127.0.0.1:10803,127.0.0.1:10804"
+    ).split(",");
     private static final long RECORD_COUNT = getLongEnv("RECORD_COUNT", 20_000_000L);
     private static final int PAGE_SIZE = getIntEnv("PAGE_SIZE", 5000);
     private static final int PARALLEL_OPS = getIntEnv("PARALLEL_OPS", 4);
@@ -66,10 +70,10 @@ public class DataStreamerTest {
         System.out.println("\n=== [1/4] Connecting to Cluster ===");
 
         try (IgniteClient client = IgniteClient.builder()
-                .addresses(CONNECT_ADDRESS)
+                .addresses(CONNECT_ADDRESSES)
                 .build()) {
 
-            System.out.printf("<<< Connected to %s%n", CONNECT_ADDRESS);
+            System.out.printf("<<< Connected to %d node(s)%n", CONNECT_ADDRESSES.length);
 
             // Phase 2: Create table without indexes (deferred index creation)
             System.out.println("\n=== [2/4] Preparing Schema ===");
@@ -101,8 +105,8 @@ public class DataStreamerTest {
      */
     private static void printConfiguration() {
         System.out.println("=== DataStreamer Test Configuration ===");
-        System.out.printf("    Connect Address: %s%n", CONNECT_ADDRESS);
-        System.out.printf("    Record Count:    %,d%n", RECORD_COUNT);
+        System.out.printf("    Connect Addresses: %s%n", String.join(", ", CONNECT_ADDRESSES));
+        System.out.printf("    Record Count:      %,d%n", RECORD_COUNT);
         System.out.printf("    Page Size:       %,d%n", PAGE_SIZE);
         System.out.printf("    Parallel Ops:    %d%n", PARALLEL_OPS);
         System.out.printf("    Monitor Interval: %d seconds%n", MONITOR_INTERVAL);
@@ -126,8 +130,8 @@ public class DataStreamerTest {
         String createTableSql = String.format(
             "CREATE TABLE %s (" +
             "    id BIGINT PRIMARY KEY, " +
-            "    name VARCHAR(100), " +
-            "    value DOUBLE" +
+            "    label VARCHAR(100), " +
+            "    amount DOUBLE" +
             ")",
             TABLE_NAME
         );
@@ -203,22 +207,22 @@ public class DataStreamerTest {
 
         long startTime = System.currentTimeMillis();
 
-        // Create index on name column
+        // Create index on label column
         try {
             client.sql().execute(null,
-                String.format("CREATE INDEX IF NOT EXISTS idx_%s_name ON %s (name)",
+                String.format("CREATE INDEX IF NOT EXISTS idx_%s_label ON %s (label)",
                     TABLE_NAME.toLowerCase(), TABLE_NAME));
-            System.out.println("    Created index: idx_testtable_name");
+            System.out.println("    Created index: idx_testtable_label");
         } catch (Exception e) {
             System.out.println("!!! Index creation warning: " + e.getMessage());
         }
 
-        // Create index on value column
+        // Create index on amount column
         try {
             client.sql().execute(null,
-                String.format("CREATE INDEX IF NOT EXISTS idx_%s_value ON %s (value)",
+                String.format("CREATE INDEX IF NOT EXISTS idx_%s_amount ON %s (amount)",
                     TABLE_NAME.toLowerCase(), TABLE_NAME));
-            System.out.println("    Created index: idx_testtable_value");
+            System.out.println("    Created index: idx_testtable_amount");
         } catch (Exception e) {
             System.out.println("!!! Index creation warning: " + e.getMessage());
         }

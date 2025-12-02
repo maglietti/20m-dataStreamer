@@ -181,8 +181,8 @@ public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<T
         private DataStreamerItem<Tuple> generateItem(long index) {
             Tuple tuple = Tuple.create()
                 .set("id", index)
-                .set("name", "Name_" + index + "_" + UUID.randomUUID().toString().substring(0, 8))
-                .set("value", Math.random() * 1000);
+                .set("label", "Label_" + index + "_" + UUID.randomUUID().toString().substring(0, 8))
+                .set("amount", Math.random() * 1000);
 
             return DataStreamerItem.of(tuple);
         }
