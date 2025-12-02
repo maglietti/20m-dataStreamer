@@ -22,10 +22,12 @@ import org.apache.ignite.table.Tuple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.UUID;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Flow;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -182,15 +184,21 @@ public class SyntheticDataPublisher implements Flow.Publisher<DataStreamerItem<T
         }
 
         /**
-         * Generates a synthetic data item matching the test schema.
+         * Generates a synthetic data item matching the original schema.
          *
-         * Schema: id (BIGINT PK), name (VARCHAR), value (DOUBLE)
+         * Schema: ID (VARCHAR PK), COLUMN1 (VARCHAR 1KB+), COLUMN2 (INT), COLUMN3 (TIMESTAMP)
          */
         private DataStreamerItem<Tuple> generateItem(long index) {
+            String id = "Primary Key " + index;
+            String column1 = DataStreamerTest.getOneKbString() + index;
+            int column2 = ThreadLocalRandom.current().nextInt();
+            LocalDateTime column3 = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);
+
             Tuple tuple = Tuple.create()
-                .set("id", index)
-                .set("label", "Label_" + index + "_" + UUID.randomUUID().toString().substring(0, 8))
-                .set("amount", Math.random() * 1000);
+                .set("ID", id)
+                .set("COLUMN1", column1)
+                .set("COLUMN2", column2)
+                .set("COLUMN3", column3);
 
             return DataStreamerItem.of(tuple);
         }

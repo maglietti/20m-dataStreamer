@@ -65,7 +65,21 @@ public class DataStreamerTest {
     private static final int MONITOR_INTERVAL = getIntEnv("MONITOR_INTERVAL_SECONDS", 10);
     private static final boolean CREATE_INDEXES_BEFORE_LOAD = getBoolEnv("CREATE_INDEXES_BEFORE_LOAD", false);
 
-    private static final String TABLE_NAME = "TestTable";
+    private static final String TABLE_NAME = "GG_TEST_TABLE_A";
+
+    // 1KB string payload matching original implementation
+    private static final String ONE_KB_STRING;
+    static {
+        StringBuilder sb = new StringBuilder(1024);
+        for (int i = 0; i < 1024; i++) {
+            sb.append('A');
+        }
+        ONE_KB_STRING = sb.toString();
+    }
+
+    public static String getOneKbString() {
+        return ONE_KB_STRING;
+    }
 
     public static void main(String[] args) {
         printConfiguration();
@@ -141,12 +155,13 @@ public class DataStreamerTest {
 
         LOG.info(">>> Creating table without indexes");
 
-        // Create table without secondary indexes for optimal bulk load performance
+        // Create table matching original schema: VARCHAR PK, 1KB+ VARCHAR, INT, TIMESTAMP
         String createTableSql = String.format(
             "CREATE TABLE %s (" +
-            "    id BIGINT PRIMARY KEY, " +
-            "    label VARCHAR(100), " +
-            "    amount DOUBLE" +
+            "    ID VARCHAR PRIMARY KEY, " +
+            "    COLUMN1 VARCHAR, " +
+            "    COLUMN2 INT, " +
+            "    COLUMN3 TIMESTAMP" +
             ")",
             TABLE_NAME
         );
@@ -221,22 +236,12 @@ public class DataStreamerTest {
 
         long startTime = System.currentTimeMillis();
 
-        // Create index on label column
+        // Create index on COLUMN2 matching original: GG_TEST_TABLE_A_COLUMN2
         try {
             client.sql().execute(null,
-                String.format("CREATE INDEX IF NOT EXISTS idx_%s_label ON %s (label)",
-                    TABLE_NAME.toLowerCase(), TABLE_NAME));
-            LOG.info("    Created index: idx_testtable_label");
-        } catch (Exception e) {
-            LOG.warn("!!! Index creation warning: {}", e.getMessage());
-        }
-
-        // Create index on amount column
-        try {
-            client.sql().execute(null,
-                String.format("CREATE INDEX IF NOT EXISTS idx_%s_amount ON %s (amount)",
-                    TABLE_NAME.toLowerCase(), TABLE_NAME));
-            LOG.info("    Created index: idx_testtable_amount");
+                String.format("CREATE INDEX IF NOT EXISTS %s_COLUMN2 ON %s (COLUMN2)",
+                    TABLE_NAME, TABLE_NAME));
+            LOG.info("    Created index: {}_COLUMN2", TABLE_NAME);
         } catch (Exception e) {
             LOG.warn("!!! Index creation warning: {}", e.getMessage());
         }
