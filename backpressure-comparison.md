@@ -106,6 +106,93 @@ The tight loop pushes records as fast as the CPU can generate them. The only thr
 
 The DataStreamer controls the pace. The publisher responds to demand rather than creating it.
 
+## How Demand Flows Between GridGain and Your Application
+
+The custom publisher approach relies on the Java Flow API (`java.util.concurrent.Flow`, JDK 9+):
+
+| Interface | Implemented By | Role |
+|-----------|----------------|------|
+| `Flow.Publisher<T>` | Your application | Produces items |
+| `Flow.Subscriber<T>` | GridGain (`StreamerSubscriber`) | Consumes items |
+| `Flow.Subscription` | Your application | Controls flow |
+
+### GridGain APIs
+
+**Entry point:**
+
+```java
+RecordView<Tuple> view = client.tables().table(TABLE_NAME).recordView();
+CompletableFuture<Void> streamFuture = view.streamData(publisher, options);
+```
+
+**Configuration:**
+
+```java
+DataStreamerOptions options = DataStreamerOptions.builder()
+    .pageSize(500)
+    .perPartitionParallelOperations(8)
+    .autoFlushInterval(1000)
+    .build();
+```
+
+**Data wrapper:**
+
+```java
+DataStreamerItem.of(tuple)  // Wraps your Tuple for streaming
+```
+
+### The Handshake Sequence
+
+```text
+1. view.streamData(publisher, options)
+       │
+       │  // Application initiates streaming, GridGain becomes the subscriber
+       │
+2. GridGain calls: publisher.subscribe(gridgainSubscriber)
+       │
+       │  // Publisher receives GridGain's subscriber, creates a Subscription
+       │
+3. Your code calls: gridgainSubscriber.onSubscribe(yourSubscription)
+       │
+       │  // GridGain now holds your Subscription, calculates initial demand
+       │
+4. GridGain stores yourSubscription, calls: yourSubscription.request(n)
+       │
+       │  // Publisher receives demand signal, generates exactly n items
+       │
+5. Your code generates n items, calls: gridgainSubscriber.onNext(item) for each
+       │
+       │  // GridGain buffers items, sends batches to cluster, tracks in-flight count
+       │
+6. GridGain processes items, when ready calls: yourSubscription.request(n) again
+       │
+       │  // Cycle continues: GridGain requests, publisher generates, until done
+       │
+       └── Repeat 5-6 until onComplete()
+```
+
+### Demand Tracking
+
+The custom publisher uses `java.util.concurrent.atomic.AtomicLong` to track demand:
+
+```java
+private final AtomicLong demand = new AtomicLong(0);
+
+public void request(long n) {           // GridGain calls this
+    demand.addAndGet(n);                // Track requested items
+    deliverItems();
+}
+
+private void deliverItemsSynchronously() {
+    while (demand.get() > 0 && ...) {   // Generate while demand exists
+        subscriber.onNext(item);        // Send to GridGain
+        demand.decrementAndGet();       // One less demanded
+    }
+}
+```
+
+GridGain decides when to call `request(n)` based on its internal capacity formula. Your publisher never sees this calculation. It responds to `request(n)` calls.
+
 ## Configuration Impact
 
 The DataStreamer's native backpressure is controlled by two options:
