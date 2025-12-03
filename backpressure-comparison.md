@@ -106,6 +106,48 @@ The tight loop pushes records as fast as the CPU can generate them. The only thr
 
 The DataStreamer controls the pace. The publisher responds to demand rather than creating it.
 
+### Data Pipeline Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["Client Application"]
+        SP[SyntheticDataPublisher<br/>Flow.Publisher]
+        SUB[SyntheticDataSubscription<br/>Flow.Subscription]
+        SP --> SUB
+    end
+
+    subgraph GridGain["GridGain Client Library"]
+        SS[StreamerSubscriber<br/>Flow.Subscriber]
+        PB[(Per-Partition<br/>Buffers)]
+        SS --> PB
+    end
+
+    subgraph Cluster["GridGain Cluster"]
+        subgraph Node1[Node 1]
+            R1[RAFT Group]
+            S1[(Storage)]
+        end
+        subgraph Node2[Node 2]
+            R2[RAFT Group]
+            S2[(Storage)]
+        end
+        subgraph Node3[Node N...]
+            R3[RAFT Group]
+            S3[(Storage)]
+        end
+    end
+
+    SS -->|"request(n)"| SUB
+    SUB -->|"onNext(item)"| SS
+    PB -->|"Batch pageSize items"| Node1
+    PB -->|"Batch pageSize items"| Node2
+    PB -->|"Batch pageSize items"| Node3
+
+    R1 --> S1
+    R2 --> S2
+    R3 --> S3
+```
+
 ## How Demand Flows Between GridGain and Your Application
 
 The custom publisher approach relies on the Java Flow API (`java.util.concurrent.Flow`, JDK 9+):
@@ -192,6 +234,41 @@ private void deliverItemsSynchronously() {
 ```
 
 GridGain decides when to call `request(n)` based on its internal capacity formula. Your publisher never sees this calculation. It responds to `request(n)` calls.
+
+### Temporal Flow of Demand and Data
+
+```mermaid
+sequenceDiagram
+    participant App as SyntheticDataPublisher
+    participant Sub as Subscription
+    participant GG as StreamerSubscriber
+    participant Buf as Partition Buffers
+    participant Cluster as GridGain Cluster
+
+    App->>GG: subscribe(subscriber)
+    GG->>Sub: onSubscribe(subscription)
+
+    loop Until onComplete()
+        GG->>Sub: request(n)
+        Note over Sub: demand.addAndGet(n)
+
+        loop While demand > 0
+            Sub->>Sub: generateItem()
+            Sub->>GG: onNext(item)
+            Note over Sub: demand.decrementAndGet()
+        end
+
+        GG->>Buf: buffer by partition
+
+        alt Buffer full (pageSize reached)
+            Buf->>Cluster: send batch
+            Cluster-->>GG: batch complete
+            Note over GG: inFlightCount--
+        end
+    end
+
+    Sub->>GG: onComplete()
+```
 
 ## Configuration Impact
 
