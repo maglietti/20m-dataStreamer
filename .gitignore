@@ -73,3 +73,6 @@ my-gridgain-*.conf
 # Test output
 test-output/
 surefire-reports/
+
+# Private data
+private/
