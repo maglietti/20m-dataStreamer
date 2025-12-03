@@ -44,8 +44,8 @@ import java.util.concurrent.TimeUnit;
  * Configuration via environment variables:
  * - IGNITE_CONNECT_ADDRESSES: Comma-separated cluster addresses (default: all 5 local nodes)
  * - RECORD_COUNT: Number of records to stream (default: 20,000,000)
- * - PAGE_SIZE: DataStreamer page size (default: 5000)
- * - PARALLEL_OPS: Per-partition parallel operations (default: 4)
+ * - PAGE_SIZE: DataStreamer page size (default: 500, optimized for smooth I/O)
+ * - PARALLEL_OPS: Per-partition parallel operations (default: 8, for natural batch staggering)
  * - MONITOR_INTERVAL_SECONDS: Progress report interval (default: 10)
  * - CREATE_INDEXES_BEFORE_LOAD: Create indexes before data load (default: false)
  */
@@ -60,10 +60,10 @@ public class DataStreamerTest {
         "127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802,127.0.0.1:10803,127.0.0.1:10804"
     ).split(",");
     private static final long RECORD_COUNT = getLongEnv("RECORD_COUNT", 20_000_000L);
-    private static final int PAGE_SIZE = getIntEnv("PAGE_SIZE", 5000);
-    private static final int PARALLEL_OPS = getIntEnv("PARALLEL_OPS", 4);
+    private static final int PAGE_SIZE = getIntEnv("PAGE_SIZE", 500);
+    private static final int PARALLEL_OPS = getIntEnv("PARALLEL_OPS", 8);
     private static final int MONITOR_INTERVAL = getIntEnv("MONITOR_INTERVAL_SECONDS", 10);
-    private static final boolean CREATE_INDEXES_BEFORE_LOAD = getBoolEnv("CREATE_INDEXES_BEFORE_LOAD", false);
+    private static final boolean CREATE_INDEXES_BEFORE_LOAD = getBoolEnv("CREATE_INDEXES_BEFORE_LOAD", true);
 
     private static final String TABLE_NAME = "GG_TEST_TABLE_A";
 
