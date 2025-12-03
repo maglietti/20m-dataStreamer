@@ -2,6 +2,23 @@
 
 This document explains why a custom `Flow.Publisher` implementation handles high-volume streaming better than `SubmissionPublisher`.
 
+## Native Backpressure in GridGain 9
+
+The DataStreamer implements request-based backpressure through the Java Flow API. The internal `StreamerSubscriber` calculates how many items to request:
+
+```java
+var desiredInFlight = buffers.size() * options.pageSize() * options.perPartitionParallelOperations();
+var toRequest = desiredInFlight - inFlight - pending;
+
+if (toRequest <= 0) {
+    return; // Backpressure: don't request more items
+}
+
+subscription.request(toRequest);
+```
+
+This mechanism works with any `Flow.Publisher` implementation. The difference is where record generation happens relative to these requests.
+
 ## The Problem
 
 When streaming 20 million records with 1KB payloads, the producer generates data faster than the cluster can persist it. Without proper backpressure, this mismatch causes buffer overflow, memory exhaustion, and cluster instability.
@@ -44,12 +61,14 @@ The custom publisher generates records only when the DataStreamer requests them.
 
 ## Why This Matters
 
+Both approaches work with the DataStreamer's native backpressure. The difference is where records wait:
+
 | Aspect | SubmissionPublisher | Custom Flow.Publisher |
 |--------|---------------------|----------------------|
-| Record generation | Continuous, pushes into buffer | On-demand, pulls when ready |
-| Memory usage | Buffer fills, then blocks | Constant, matches consumption |
-| Backpressure signal | Buffer full (reactive) | Demand count (proactive) |
-| Producer awareness | None until blocked | Knows exact downstream capacity |
+| Record generation | Ahead of demand, into buffer | On-demand, when requested |
+| Memory location | Publisher's internal buffer | Not allocated until needed |
+| Backpressure layer | Publisher buffer + native | Native only |
+| Producer thread | Blocks when buffer full | Pauses between requests |
 
 ### Buffer Behavior
 
@@ -89,12 +108,42 @@ The DataStreamer controls the pace. The publisher responds to demand rather than
 
 ## Configuration Impact
 
-The original used `pageSize=1000, parallelOps=1`. With blocking backpressure, larger batches cause longer blocks and bigger I/O spikes when unblocked.
+The DataStreamer's native backpressure is controlled by two options:
 
-The custom publisher works well with `pageSize=500, parallelOps=8`. Smaller batches with higher parallelism create steady demand signals, resulting in smooth I/O patterns that the cluster checkpoint system can handle.
+- **pageSize**: Items per network call (default: 1000)
+- **perPartitionParallelOperations**: Concurrent batches per partition (default: 1)
+
+The formula `buffers.size() × pageSize × perPartitionParallelOperations` determines maximum in-flight items per partition.
+
+Total client memory pressure across all partitions: `pageSize × parallelOps × partitions × recordSize`
+
+With 25 partitions and ~1KB records:
+
+| Configuration | Page Size | Parallel Ops | In-Flight Data |
+|---------------|-----------|--------------|----------------|
+| Original team | 1,000 | 1 | 27.5 MB |
+| Custom publisher | 500 | 8 | 110 MB |
+
+The original team used `pageSize=1000, parallelOps=1` with `SubmissionPublisher`. Result: 394 lease failures, 986 replication lag warnings, ~18 minutes.
+
+The custom publisher with `pageSize=500, parallelOps=8` completed in ~7 minutes with zero lease failures. Smaller batches with higher parallelism create steady demand signals, resulting in smooth I/O patterns that the cluster checkpoint system can handle.
 
 ## Summary
 
-`SubmissionPublisher` provides backpressure through blocking. This works for moderate loads but creates problems at scale because the producer has no visibility into downstream capacity.
+The DataStreamer's native backpressure uses `subscription.request(n)` to control flow. This works with any `Flow.Publisher`. The difference is where record generation happens.
 
-A custom `Flow.Publisher` implements the Reactive Streams pattern where the subscriber (DataStreamer) explicitly requests items. This demand-driven approach keeps the producer and consumer synchronized, preventing the buffer overflow and I/O spikes that caused lease failures in the original implementation.
+**SubmissionPublisher approach:**
+
+- Producer generates records in a tight loop into the publisher's buffer
+- Buffer respects native backpressure by blocking when full
+- Records accumulate before the DataStreamer requests them
+- Creates I/O spikes when buffer drains
+
+**Custom Flow.Publisher approach:**
+
+- Producer generates records only when `request(n)` is called
+- No intermediate buffer layer
+- Memory stays constant, matching consumption rate
+- Smooth I/O patterns
+
+For 20 million records with 1KB payloads, the original team's `SubmissionPublisher` approach resulted in 394 lease failures. The custom publisher with optimized configuration achieved zero failures in less than half the time.
